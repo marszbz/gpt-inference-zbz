@@ -124,7 +124,8 @@ class ModelManager:
                 optimization_config['load_in_8bit'] = False  # RTX 3080显存足够，不使用8bit
         
         return optimization_config
-      def load_model(self, local_rank: Optional[int] = None) -> None:
+    
+    def load_model(self, local_rank: Optional[int] = None) -> None:
         """加载模型和分词器"""
         self.logger.info(f"加载模型: {self.config['model']['name']}")
         
