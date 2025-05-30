@@ -1,0 +1,39 @@
+# 数据配置
+dataset:
+  sources:
+    wikitext103:
+      enabled: true
+      dataset_name: "wikitext"
+      dataset_config: "wikitext-103-raw-v1"
+      split: "train"
+      num_samples: 5000 # 从WikiText-103采样的样本数
+
+    pile:
+      enabled: true
+      dataset_name: "EleutherAI/pile"
+      subset: "ArXiv" # Pile的子集，可选择其他如GitHub、Books3等
+      split: "train"
+      num_samples: 5000 # 从Pile采样的样本数
+
+    synthetic:
+      enabled: true
+      vocab_size: 50257 # GPT-2的词汇表大小
+      num_samples: 6000 # 合成随机token的样本数
+
+# 测试配置
+test_configs:
+  prompt_lengths: [32, 128, 512, 1024]
+  generation_lengths: [32, 64]
+  samples_per_config: 500
+
+# 数据处理配置
+processing:
+  max_workers: 4
+  chunk_size: 1000
+  seed: 42
+
+# 输出配置
+output:
+  format: "jsonl"
+  dataset_path: "data/datasets/benchmark_dataset.jsonl"
+  split_by_config: true # 是否按配置分割文件

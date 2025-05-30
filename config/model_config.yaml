@@ -1,0 +1,72 @@
+# 模型配置
+model:
+  name: "gpt2-xl" # 使用GPT2-XL (1.5B参数)
+  model_path: "gpt2-xl" # 可以是本地路径或HuggingFace模型名
+  tokenizer_path: "gpt2-xl"
+  max_length: 1024
+  device_map: null # 由分布式策略控制
+  torch_dtype: "float16" # 使用FP16减少显存占用
+
+# 硬件配置 - RTX 3080专用设置
+hardware:
+  gpu_count: 4
+  gpu_memory_gb: 10 # RTX 3080的显存大小
+  pcie_bandwidth: "16x" # PCIe 4.0 x16
+  nvlink_available: false # RTX 3080不支持NVLink
+
+# 分布式配置
+distributed:
+  backend: "nccl" # NVIDIA GPU优化的后端
+  world_size: 4 # 4张GPU
+  master_addr: "localhost"
+  master_port: "12355"
+  init_method: "env://"
+  timeout_minutes: 30
+
+# DeepSpeed配置
+deepspeed:
+  enabled: true
+  config_path: "config/deepspeed_config.json"
+  zero_stage: 3 # ZeRO-3优化显存使用
+
+# 并行策略配置
+parallel_strategy:
+  # 策略选择: "data_parallel", "model_parallel", "pipeline_parallel", "hybrid"
+  strategy: "hybrid"
+
+  # 数据并行配置
+  data_parallel:
+    enabled: true
+    world_size: 4
+
+  # 模型并行配置
+  model_parallel:
+    tensor_parallel_size: 2 # 张量并行: 2路
+    pipeline_parallel_size: 2 # 流水线并行: 2路
+    sequence_parallel: true # 序列并行优化通信
+
+  # 自定义并行策略
+  custom_strategies:
+    # 策略1: 纯数据并行（适合小模型）
+    pure_data_parallel:
+      data_parallel: true
+      tensor_parallel_size: 1
+      pipeline_parallel_size: 1
+
+    # 策略2: 2路张量并行 + 2路数据并行
+    tensor_data_hybrid:
+      data_parallel: true
+      tensor_parallel_size: 2
+      pipeline_parallel_size: 1
+
+    # 策略3: 2路流水线并行 + 2路数据并行
+    pipeline_data_hybrid:
+      data_parallel: true
+      tensor_parallel_size: 1
+      pipeline_parallel_size: 2
+
+    # 策略4: 完全模型并行（适合大模型）
+    full_model_parallel:
+      data_parallel: false
+      tensor_parallel_size: 2
+      pipeline_parallel_size: 2
