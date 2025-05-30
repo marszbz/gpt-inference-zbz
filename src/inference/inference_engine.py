@@ -138,7 +138,8 @@ class DistributedInferenceEngine:
             memory_info['gpu_memory_max_allocated_mb'] = torch.cuda.max_memory_allocated() / 1024 / 1024
         
         return memory_info
-      def measure_gpu_utilization(self) -> float:
+    
+    def measure_gpu_utilization(self) -> float:
         """测量GPU利用率"""
         if not self.nvml_initialized:
             return 0.0
