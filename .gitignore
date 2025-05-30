@@ -1,0 +1,80 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyTorch
+*.pth
+*.pt
+*.ckpt
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# VS Code
+.vscode/
+
+# Data files (too large for git)
+data/raw/
+data/processed/
+data/datasets/
+
+# Results and logs
+results/
+logs/
+*.log
+
+# Model files (too large for git)
+models/
+*.bin
+*.safetensors
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Wandb
+wandb/
+
+# DeepSpeed
+.deepspeed*
+
+# CUDA
+*.cu.o
+*.ptx
+
+# Cache
+.cache/
