@@ -183,33 +183,65 @@ class PerformanceMonitor:
         }
         
         return stats
-    
-    def get_system_info(self) -> Dict[str, Any]:
+      def get_system_info(self) -> Dict[str, Any]:
         """获取系统信息"""
         system_info = {}
         
         # CPU信息
-        system_info['cpu_count'] = psutil.cpu_count()
-        system_info['cpu_count_logical'] = psutil.cpu_count(logical=True)
-        system_info['cpu_freq'] = psutil.cpu_freq()._asdict() if psutil.cpu_freq() else None
+        try:
+            # 尝试获取CPU型号
+            cpu_model = "Unknown CPU"
+            try:
+                import platform
+                cpu_model = platform.processor()
+                if not cpu_model:
+                    cpu_model = platform.machine()
+            except:
+                pass
+            
+            system_info['cpu'] = {
+                'model': cpu_model,
+                'cores': psutil.cpu_count(logical=False),
+                'logical_cores': psutil.cpu_count(logical=True),
+                'frequency': psutil.cpu_freq()._asdict() if psutil.cpu_freq() else None
+            }
+        except Exception as e:
+            self.logger.warning(f"获取CPU信息失败: {e}")
+            system_info['cpu'] = {
+                'model': 'Unknown',
+                'cores': 1,
+                'logical_cores': 1,
+                'frequency': None
+            }
         
         # 内存信息
-        memory = psutil.virtual_memory()
-        system_info['memory_total_gb'] = memory.total / (1024**3)
-        system_info['memory_available_gb'] = memory.available / (1024**3)
-        system_info['memory_usage_percent'] = memory.percent
+        try:
+            memory = psutil.virtual_memory()
+            system_info['memory'] = {
+                'total_gb': memory.total / (1024**3),
+                'available_gb': memory.available / (1024**3),
+                'usage_percent': memory.percent
+            }
+        except Exception as e:
+            self.logger.warning(f"获取内存信息失败: {e}")
+            system_info['memory'] = {
+                'total_gb': 0.0,
+                'available_gb': 0.0,
+                'usage_percent': 0.0
+            }
         
         # GPU信息
-        system_info['gpu_available'] = self.nvml_available
         if self.nvml_available:
             try:
                 device_count = pynvml.nvmlDeviceGetCount()
-                system_info['gpu_count'] = device_count
-                system_info['gpu_info'] = []
+                gpu_list = []
                 
                 for i in range(device_count):
                     handle = pynvml.nvmlDeviceGetHandleByIndex(i)
-                    name = pynvml.nvmlDeviceGetName(handle).decode('utf-8')
+                    name = pynvml.nvmlDeviceGetName(handle)
+                    # 处理不同版本的pynvml返回值类型
+                    if isinstance(name, bytes):
+                        name = name.decode('utf-8')
                     memory_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
                     
                     gpu_info = {
@@ -219,14 +251,21 @@ class PerformanceMonitor:
                         'memory_free_gb': memory_info.free / (1024**3),
                         'memory_used_gb': memory_info.used / (1024**3)
                     }
-                    system_info['gpu_info'].append(gpu_info)
+                    gpu_list.append(gpu_info)
+                
+                system_info['gpu'] = gpu_list
+                system_info['gpu_available'] = True
+                system_info['gpu_count'] = device_count
+                
             except Exception as e:
                 self.logger.warning(f"获取GPU信息失败: {e}")
+                system_info['gpu'] = []
+                system_info['gpu_available'] = False
                 system_info['gpu_count'] = 0
-                system_info['gpu_info'] = []
         else:
+            system_info['gpu'] = []
+            system_info['gpu_available'] = False
             system_info['gpu_count'] = 0
-            system_info['gpu_info'] = []
         
         return system_info
 
