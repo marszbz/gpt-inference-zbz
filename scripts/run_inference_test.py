@@ -184,11 +184,10 @@ def run_distributed_inference(args):
 
 def main():
     parser = argparse.ArgumentParser(description='GPT分布式推理性能测试')
-    
-    # 基本参数
+      # 基本参数
     parser.add_argument('--dataset', type=str, 
-                       default='data/datasets/benchmark_dataset.jsonl',
-                       help='测试数据集路径')
+                       default='data/datasets',
+                       help='测试数据集目录路径')
     parser.add_argument('--model-config', type=str, 
                        default='config/model_config.yaml',
                        help='模型配置文件路径')
@@ -226,16 +225,40 @@ def main():
     
     # 设置日志
     setup_logging(0, args.log_level)
-    logger = logging.getLogger(__name__)
-    
-    # 检查CUDA可用性
+    logger = logging.getLogger(__name__)    # 检查CUDA可用性 - 仅支持GPU推理
     if not torch.cuda.is_available():
-        logger.error("CUDA不可用，无法运行GPU推理测试")
+        logger.error("CUDA不可用，此性能测试仅支持GPU环境")
+        logger.error("请确保：")
+        logger.error("1. 安装了支持CUDA的PyTorch版本")
+        logger.error("2. 系统中有可用的NVIDIA GPU")
+        logger.error("3. 正确安装了CUDA驱动")
         sys.exit(1)
     
-    # 检查数据集文件
-    if not Path(args.dataset).exists():
-        logger.error(f"数据集文件不存在: {args.dataset}")
+    gpu_count = torch.cuda.device_count()
+    logger.info(f"检测到 {gpu_count} 个GPU设备")
+    for i in range(gpu_count):
+        gpu_name = torch.cuda.get_device_name(i)
+        logger.info(f"GPU {i}: {gpu_name}")
+    
+    device = "cuda"
+      # 检查数据集文件
+    dataset_path = Path(args.dataset)
+    if dataset_path.is_dir():
+        # 检查是否有配置文件
+        config_files = list(dataset_path.glob("benchmark_dataset_config_*.jsonl"))
+        if not config_files:
+            logger.error(f"数据集目录中没有找到配置文件: {args.dataset}")
+            logger.info("请先运行 'python scripts/generate_dataset.py' 生成数据集")
+            sys.exit(1)
+        logger.info(f"找到 {len(config_files)} 个数据集配置文件")
+    elif dataset_path.is_file():
+        # 单个文件
+        if not dataset_path.exists():
+            logger.error(f"数据集文件不存在: {args.dataset}")
+            logger.info("请先运行 'python scripts/generate_dataset.py' 生成数据集")
+            sys.exit(1)
+    else:
+        logger.error(f"数据集路径不存在: {args.dataset}")
         logger.info("请先运行 'python scripts/generate_dataset.py' 生成数据集")
         sys.exit(1)
     
