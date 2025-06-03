@@ -321,17 +321,20 @@ class DistributedInferenceEngine:
         first_token_time = None
         memory_before = self.measure_memory_usage() if measure_performance else {}
         gpu_util_before = self.measure_gpu_utilization() if measure_performance else 0.0
-        
-        # 生成文本
+          # 生成文本
         with torch.no_grad():
             # 记录首token时间（简化实现）
             first_token_start = time.perf_counter()
+            
+            # 准备生成参数，排除不是模型生成参数的配置
+            generation_config = {k: v for k, v in self.config['inference'].items() 
+                                if k not in ['batch_size', 'num_iterations', 'warmup_steps']}
             
             outputs = self.model_manager.generate(
                 input_ids=inputs['input_ids'],
                 attention_mask=inputs['attention_mask'],
                 max_new_tokens=generation_length,
-                **self.config['inference']
+                **generation_config
             )
             
             # 简化的首token时间计算
