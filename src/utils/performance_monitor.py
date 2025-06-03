@@ -183,6 +183,52 @@ class PerformanceMonitor:
         }
         
         return stats
+    
+    def get_system_info(self) -> Dict[str, Any]:
+        """获取系统信息"""
+        system_info = {}
+        
+        # CPU信息
+        system_info['cpu_count'] = psutil.cpu_count()
+        system_info['cpu_count_logical'] = psutil.cpu_count(logical=True)
+        system_info['cpu_freq'] = psutil.cpu_freq()._asdict() if psutil.cpu_freq() else None
+        
+        # 内存信息
+        memory = psutil.virtual_memory()
+        system_info['memory_total_gb'] = memory.total / (1024**3)
+        system_info['memory_available_gb'] = memory.available / (1024**3)
+        system_info['memory_usage_percent'] = memory.percent
+        
+        # GPU信息
+        system_info['gpu_available'] = self.nvml_available
+        if self.nvml_available:
+            try:
+                device_count = pynvml.nvmlDeviceGetCount()
+                system_info['gpu_count'] = device_count
+                system_info['gpu_info'] = []
+                
+                for i in range(device_count):
+                    handle = pynvml.nvmlDeviceGetHandleByIndex(i)
+                    name = pynvml.nvmlDeviceGetName(handle).decode('utf-8')
+                    memory_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+                    
+                    gpu_info = {
+                        'index': i,
+                        'name': name,
+                        'memory_total_gb': memory_info.total / (1024**3),
+                        'memory_free_gb': memory_info.free / (1024**3),
+                        'memory_used_gb': memory_info.used / (1024**3)
+                    }
+                    system_info['gpu_info'].append(gpu_info)
+            except Exception as e:
+                self.logger.warning(f"获取GPU信息失败: {e}")
+                system_info['gpu_count'] = 0
+                system_info['gpu_info'] = []
+        else:
+            system_info['gpu_count'] = 0
+            system_info['gpu_info'] = []
+        
+        return system_info
 
 
 class CommunicationProfiler:

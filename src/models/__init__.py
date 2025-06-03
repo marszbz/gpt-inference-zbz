@@ -3,5 +3,6 @@
 """
 
 from .model_manager import ModelManager, ModelParallelManager
+from .parallel_strategy import ParallelStrategyManager
 
-__all__ = ['ModelManager', 'ModelParallelManager']
+__all__ = ['ModelManager', 'ModelParallelManager', 'ParallelStrategyManager']
