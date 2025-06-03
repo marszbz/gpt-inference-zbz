@@ -177,13 +177,13 @@ class PerformanceMonitor:
             'gpu_memory': {
                 'mean': float(np.mean(gpu_memories)),
                 'max': float(np.max(gpu_memories)),
-                'min': float(np.min(gpu_memories)),
-                'std': float(np.std(gpu_memories))
+                'min': float(np.min(gpu_memories)),            'std': float(np.std(gpu_memories))
             }
         }
         
         return stats
-      def get_system_info(self) -> Dict[str, Any]:
+    
+    def get_system_info(self) -> Dict[str, Any]:
         """获取系统信息"""
         system_info = {}
         
