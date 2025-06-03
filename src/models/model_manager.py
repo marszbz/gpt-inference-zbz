@@ -342,13 +342,20 @@ class ModelManager:
             "temperature": 1.0,
             **generation_kwargs
         }
-        
-        # 生成
-        outputs = model.generate(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            **generation_config
-        )
+          # 生成 - 处理DataParallel包装的模型
+        if hasattr(model, 'module'):
+            # 如果模型被DataParallel包装，使用module属性访问原始模型
+            outputs = model.module.generate(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                **generation_config
+            )
+        else:
+            outputs = model.generate(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                **generation_config
+            )
         
         return outputs
     
