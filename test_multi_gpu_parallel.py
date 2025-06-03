@@ -12,13 +12,14 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-# 添加src目录到Python路径
+# 添加项目根目录到Python路径
 project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root / "src"))
+sys.path.insert(0, str(project_root))
 
-from models.model_manager import ModelManager
-from inference.inference_engine import InferenceEngine
-from utils.performance_monitor import PerformanceMonitor
+from src.models.model_manager import ModelManager
+from src.inference.inference_engine import DistributedInferenceEngine
+from src.utils.performance_monitor import PerformanceMonitor
+from src.utils.data_loader import DataLoader
 
 def test_multi_gpu_data_parallel():
     """测试多GPU数据并行推理"""
@@ -72,15 +73,16 @@ def test_multi_gpu_data_parallel():
         print(f"测试: {description}")
         print(f"GPU数量: {num_gpus}, 批次大小: {batch_size}")
         print(f"{'='*50}")
-        
-        try:
+          try:
             # 初始化组件
             model_manager = ModelManager()
             performance_monitor = PerformanceMonitor()
             
             # 加载模型
             print("正在加载模型...")
-            model, tokenizer = model_manager.load_model("gpt2-xl")
+            model_manager.load_model()
+            model = model_manager.model
+            tokenizer = model_manager.tokenizer
             
             # 如果是多GPU，使用DataParallel
             if num_gpus > 1:
@@ -88,11 +90,9 @@ def test_multi_gpu_data_parallel():
                 print(f"启用DataParallel，使用GPU: {list(range(num_gpus))}")
             
             # 初始化推理引擎
-            inference_engine = InferenceEngine(
-                model=model,
-                tokenizer=tokenizer,
-                strategy="data_parallel",
-                num_gpus=num_gpus
+            inference_engine = DistributedInferenceEngine(
+                model_manager, 
+                "config/inference_config.yaml"
             )
             
             # 开始性能监控
