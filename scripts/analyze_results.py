@@ -110,42 +110,94 @@ def print_result_summary(args):
     with open(result_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
     
-    print("\n=== GPT-1.5B 推理性能测试结果摘要 ===")
-    print(f"测试时间: {data['metadata']['timestamp']}")
-    print(f"模型: {data['metadata']['model_info'].get('model_name', 'N/A')}")
-    print(f"总参数量: {data['metadata']['model_info'].get('num_parameters', 'N/A')}")
-    print(f"设备: {data['metadata']['model_info'].get('device', 'N/A')}")
-    print(f"分布式: {data['metadata']['model_info'].get('is_distributed', False)}")
+    print("\n=== GPT-1.5B 分布式推理性能测试结果摘要 ===")
     
-    print("\n=== 配置性能对比 ===")
-    print(f"{'配置ID':<8} {'Prompt长度':<12} {'生成长度':<10} {'吞吐量':<15} {'延迟':<12} {'GPU利用率':<12}")
-    print("-" * 80)
+    # 检查数据格式，支持两种格式：
+    # 1. 新的分布式格式：包含 rank, strategy, device 等顶级字段
+    # 2. 旧的基准测试格式：包含 metadata 和 results 字段
     
-    for config_id, config_data in data['results'].items():
-        config = config_data['config']
-        stats = config_data['statistics']
+    if 'rank' in data and 'strategy' in data:
+        # 新的分布式测试格式
+        print(f"Rank: {data.get('rank', 'N/A')}")
+        print(f"分布式策略: {data.get('strategy', 'N/A')}")
+        print(f"设备: {data.get('device', 'N/A')}")
+        print(f"总样本数: {data.get('total_samples', 'N/A')}")
+        print(f"总用时: {data.get('total_time', 0):.2f} 秒")
         
-        throughput = stats['throughput']['mean']
-        latency = stats['latency']['total_time']['mean']
-        gpu_util = stats['gpu_utilization']['mean']
+        if 'metrics' in data:
+            metrics = data['metrics']
+            print(f"\n=== 性能指标 ===")
+            print(f"吞吐量: {metrics.get('throughput_tokens_per_sec', 0):.2f} tokens/s")
+            print(f"平均延迟: {metrics.get('average_latency_sec', 0):.2f} 秒")
+            print(f"总token数: {metrics.get('total_tokens', 0)}")
         
-        print(f"{config_id:<8} {config['prompt_length']:<12} {config['generation_length']:<10} "
-              f"{throughput:<15.2f} {latency:<12.2f} {gpu_util:<12.1f}")
+        if 'memory_stats' in data:
+            memory = data['memory_stats']
+            print(f"\n=== 内存使用 ===")
+            print(f"最大分配内存: {memory.get('max_memory_allocated', 0):.2f} MB")
+            print(f"最大保留内存: {memory.get('max_memory_reserved', 0):.2f} MB")
+            print(f"当前分配内存: {memory.get('current_memory_allocated', 0):.2f} MB")
+        
+        if 'system_metrics' in data:
+            system = data['system_metrics']
+            if 'gpu_usage' in system:
+                gpu_util = system['gpu_usage']
+                print(f"\n=== 系统指标 ===")
+                print(f"平均GPU利用率: {gpu_util.get('mean', 0):.1f}%")
+                print(f"最大GPU利用率: {gpu_util.get('max', 0):.1f}%")
+                print(f"GPU利用率标准差: {gpu_util.get('std', 0):.2f}%")
+                
+            if 'cpu_usage' in system:
+                cpu_util = system['cpu_usage']
+                print(f"平均CPU利用率: {cpu_util.get('mean', 0):.1f}%")
+                
+            if 'gpu_memory' in system:
+                gpu_mem = system['gpu_memory']
+                print(f"平均GPU内存使用: {gpu_mem.get('mean', 0):.1f}%")
     
-    # 计算总体统计
-    all_throughputs = [data['results'][cid]['statistics']['throughput']['mean'] 
-                      for cid in data['results']]
-    all_latencies = [data['results'][cid]['statistics']['latency']['total_time']['mean'] 
-                    for cid in data['results']]
-    all_gpu_utils = [data['results'][cid]['statistics']['gpu_utilization']['mean'] 
-                    for cid in data['results']]
+    elif 'metadata' in data and 'results' in data:
+        # 旧的基准测试格式
+        print(f"测试时间: {data['metadata']['timestamp']}")
+        print(f"模型: {data['metadata']['model_info'].get('model_name', 'N/A')}")
+        print(f"总参数量: {data['metadata']['model_info'].get('num_parameters', 'N/A')}")
+        print(f"设备: {data['metadata']['model_info'].get('device', 'N/A')}")
+        print(f"分布式: {data['metadata']['model_info'].get('is_distributed', False)}")
+        
+        print("\n=== 配置性能对比 ===")
+        print(f"{'配置ID':<8} {'Prompt长度':<12} {'生成长度':<10} {'吞吐量':<15} {'延迟':<12} {'GPU利用率':<12}")
+        print("-" * 80)
+        
+        for config_id, config_data in data['results'].items():
+            config = config_data['config']
+            stats = config_data['statistics']
+            
+            throughput = stats['throughput']['mean']
+            latency = stats['latency']['total_time']['mean']
+            gpu_util = stats['gpu_utilization']['mean']
+            
+            print(f"{config_id:<8} {config['prompt_length']:<12} {config['generation_length']:<10} "
+                  f"{throughput:<15.2f} {latency:<12.2f} {gpu_util:<12.1f}")
+        
+        # 计算总体统计
+        all_throughputs = [data['results'][cid]['statistics']['throughput']['mean'] 
+                          for cid in data['results']]
+        all_latencies = [data['results'][cid]['statistics']['latency']['total_time']['mean'] 
+                        for cid in data['results']]
+        all_gpu_utils = [data['results'][cid]['statistics']['gpu_utilization']['mean'] 
+                        for cid in data['results']]
+        
+        print("\n=== 总体统计 ===")
+        print(f"平均吞吐量: {sum(all_throughputs)/len(all_throughputs):.2f} tokens/s")
+        print(f"最大吞吐量: {max(all_throughputs):.2f} tokens/s")
+        print(f"平均延迟: {sum(all_latencies)/len(all_latencies):.2f} ms")
+        print(f"最小延迟: {min(all_latencies):.2f} ms")
+        print(f"平均GPU利用率: {sum(all_gpu_utils)/len(all_gpu_utils):.1f}%")
     
-    print("\n=== 总体统计 ===")
-    print(f"平均吞吐量: {sum(all_throughputs)/len(all_throughputs):.2f} tokens/s")
-    print(f"最大吞吐量: {max(all_throughputs):.2f} tokens/s")
-    print(f"平均延迟: {sum(all_latencies)/len(all_latencies):.2f} ms")
-    print(f"最小延迟: {min(all_latencies):.2f} ms")
-    print(f"平均GPU利用率: {sum(all_gpu_utils)/len(all_gpu_utils):.1f}%")
+    else:
+        print("⚠️ 无法识别的结果文件格式")
+        print("支持的格式:")
+        print("1. 分布式测试结果（包含 rank, strategy 字段）")
+        print("2. 基准测试结果（包含 metadata, results 字段）")
 
 def main():
     parser = argparse.ArgumentParser(description='分析GPT推理性能测试结果')
