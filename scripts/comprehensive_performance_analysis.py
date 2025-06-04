@@ -9,10 +9,15 @@ import os
 from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib
 import seaborn as sns
 from datetime import datetime
 from typing import Dict, List, Any
 import numpy as np
+
+# 配置中文字体显示
+matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans', 'Microsoft YaHei', 'Arial Unicode MS']
+matplotlib.rcParams['axes.unicode_minus'] = False
 
 def load_test_results(results_dir: str) -> Dict[str, Any]:
     """加载所有测试结果"""
