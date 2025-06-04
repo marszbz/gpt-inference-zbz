@@ -532,13 +532,13 @@ class ModelManager:
             actual_device_id = local_rank % torch.cuda.device_count() if torch.cuda.is_available() else 0
             self.model = DDP(
                 self.model,
-                device_ids=[actual_device_id] if torch.cuda.is_available() else None,
-                output_device=actual_device_id if torch.cuda.is_available() else None,
+                device_ids=[actual_device_id] if torch.cuda.is_available() else None,                output_device=actual_device_id if torch.cuda.is_available() else None,
                 process_group=self.parallel_groups.get('data_parallel_group')
             )
         
         self.is_distributed = True
-      def _setup_full_model_parallel(self, local_rank: int, world_size: int, **config):
+    
+    def _setup_full_model_parallel(self, local_rank: int, world_size: int, **config):
         """设置全模型并行策略"""
         self.logger.info("设置全模型并行策略")
         
@@ -567,14 +567,14 @@ class ModelManager:
         # 创建并行组
         self._create_parallel_groups(local_rank, world_size, tp_size, 1, pp_size)
         
-        # 将模型移动到GPU
-        self.model = self.model.to(self.device)
+        # 将模型移动到GPU        self.model = self.model.to(self.device)
         
         # 简化的全模型并行实现
         self.logger.warning("全模型并行需要专门的库支持，当前使用简化实现")
         
         self.is_distributed = True
-      def _create_parallel_groups(self, rank: int, world_size: int, 
+    
+    def _create_parallel_groups(self, rank: int, world_size: int, 
                                tp_size: int = 1, dp_size: int = 1, pp_size: int = 1):
         """创建并行进程组"""
         self.parallel_groups = {}
