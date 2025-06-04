@@ -29,6 +29,9 @@ def setup_environment_for_worker(rank: int, world_size: int, master_port: int = 
     # DeepSpeed环境变量
     env['CUDA_VISIBLE_DEVICES'] = str(rank)
     
+    # 消除tokenizer警告
+    env['TOKENIZERS_PARALLELISM'] = 'false'
+    
     return env
 
 def run_worker_subprocess(rank: int, world_size: int, args):

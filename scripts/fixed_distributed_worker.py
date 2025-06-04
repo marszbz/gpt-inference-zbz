@@ -273,9 +273,9 @@ def run_distributed_inference_worker(args):
             'detailed_results': results,
             'timestamp': datetime.datetime.now().isoformat()
         }
-        
-        # 保存结果
-        results_dir = Path("results")
+          # 保存结果 - 使用绝对路径
+        project_root = Path(__file__).parent.parent
+        results_dir = project_root / "results"
         results_dir.mkdir(exist_ok=True)
         
         result_file = results_dir / f"distributed_{args.strategy}_rank_{world_rank}.json"
@@ -301,8 +301,7 @@ def run_distributed_inference_worker(args):
         logger.info(f"Rank {world_rank} 推理完成")
         
         return final_result
-        
-    except Exception as e:
+          except Exception as e:
         logger.error(f"Rank {world_rank} 推理过程出错: {str(e)}")
         logger.error(f"错误详情: {traceback.format_exc()}")
         
@@ -314,7 +313,8 @@ def run_distributed_inference_worker(args):
             'timestamp': datetime.datetime.now().isoformat()
         }
         
-        results_dir = Path("results")
+        project_root = Path(__file__).parent.parent
+        results_dir = project_root / "results"
         results_dir.mkdir(exist_ok=True)
         error_file = results_dir / f"error_{args.strategy}_rank_{world_rank}.json"
         
