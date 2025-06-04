@@ -233,8 +233,7 @@ def run_distributed_inference_worker(args):
         
         total_end_time = time.time()
         total_time = total_end_time - total_start_time
-        
-        # 计算性能指标
+          # 计算性能指标
         total_samples = len(results)
         total_tokens = sum(r.get('input_tokens', 0) + r.get('output_tokens', 0) for r in results)
         throughput = total_tokens / total_time if total_time > 0 else 0
@@ -248,7 +247,8 @@ def run_distributed_inference_worker(args):
                 'max_memory_reserved': torch.cuda.max_memory_reserved(local_rank) / 1024**2,  # MB
                 'current_memory_allocated': torch.cuda.memory_allocated(local_rank) / 1024**2,  # MB
             }
-          # 停止监控
+        
+        # 停止监控
         monitor.stop_monitoring()
         system_metrics = monitor.get_statistics()
         
@@ -267,13 +267,13 @@ def run_distributed_inference_worker(args):
                 'total_tokens': total_tokens,
                 'total_samples': total_samples,
                 'total_time': total_time
-            },
-            'memory_stats': memory_stats,
+            },            'memory_stats': memory_stats,
             'system_metrics': system_metrics,
             'detailed_results': results,
             'timestamp': datetime.datetime.now().isoformat()
         }
-          # 保存结果 - 使用绝对路径
+        
+        # 保存结果 - 使用绝对路径
         project_root = Path(__file__).parent.parent
         results_dir = project_root / "results"
         results_dir.mkdir(exist_ok=True)
@@ -294,14 +294,13 @@ def run_distributed_inference_worker(args):
         logger.info(f"平均延迟: {avg_latency:.2f}s")
         if memory_stats:
             logger.info(f"内存使用: {memory_stats['max_memory_allocated']:.2f}MB")
-        
-        # 清理资源
+          # 清理资源
         model_manager.cleanup()
         
         logger.info(f"Rank {world_rank} 推理完成")
-        
         return final_result
-          except Exception as e:
+        
+    except Exception as e:
         logger.error(f"Rank {world_rank} 推理过程出错: {str(e)}")
         logger.error(f"错误详情: {traceback.format_exc()}")
         
