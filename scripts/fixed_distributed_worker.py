@@ -240,14 +240,16 @@ def run_distributed_inference_worker(args):
         total_tokens = sum(r.get('input_tokens', 0) + r.get('output_tokens', 0) for r in results)
         throughput = total_tokens / total_time if total_time > 0 else 0
         avg_latency = total_time / total_samples if total_samples > 0 else 0
-        
-        # 获取内存使用情况
+          # 获取内存使用情况
         memory_stats = {}
         if torch.cuda.is_available():
+            # 使用actual_device_id而不是local_rank来获取内存统计
+            available_gpus = torch.cuda.device_count()
+            actual_device_id = local_rank % available_gpus
             memory_stats = {
-                'max_memory_allocated': torch.cuda.max_memory_allocated(local_rank) / 1024**2,  # MB
-                'max_memory_reserved': torch.cuda.max_memory_reserved(local_rank) / 1024**2,  # MB
-                'current_memory_allocated': torch.cuda.memory_allocated(local_rank) / 1024**2,  # MB
+                'max_memory_allocated': torch.cuda.max_memory_allocated(actual_device_id) / 1024**2,  # MB
+                'max_memory_reserved': torch.cuda.max_memory_reserved(actual_device_id) / 1024**2,  # MB
+                'current_memory_allocated': torch.cuda.memory_allocated(actual_device_id) / 1024**2,  # MB
             }
         
         # 停止监控
@@ -348,8 +350,8 @@ def main():
                         choices=['pure_data_parallel', 'tensor_data_hybrid', 
                                'pipeline_data_hybrid', 'full_model_parallel'],
                         default='pure_data_parallel',
-                        help="并行策略")
-      # 推理参数
+                        help="并行策略")    
+    # 推理参数
     parser.add_argument("--batch_size", type=int, default=4,
                         help="批次大小")
     parser.add_argument("--data_path", type=str,
