@@ -128,12 +128,12 @@ class ModelManager:
     def load_model(self, local_rank: Optional[int] = None) -> None:
         """加载模型和分词器"""
         self.logger.info(f"加载模型: {self.config['model']['name']}")
-        
-        # 加载分词器
+          # 加载分词器
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.config['model']['tokenizer_path'],
             cache_dir="./cache",
-            local_files_only=False
+            local_files_only=False,
+            padding_side='left'  # 修复decoder-only模型的padding警告
         )
         
         if self.tokenizer.pad_token is None:

@@ -248,10 +248,9 @@ def run_distributed_inference_worker(args):
                 'max_memory_reserved': torch.cuda.max_memory_reserved(local_rank) / 1024**2,  # MB
                 'current_memory_allocated': torch.cuda.memory_allocated(local_rank) / 1024**2,  # MB
             }
-        
-        # 停止监控
+          # 停止监控
         monitor.stop_monitoring()
-        system_metrics = monitor.get_metrics()
+        system_metrics = monitor.get_statistics()
         
         # 准备结果
         final_result = {
