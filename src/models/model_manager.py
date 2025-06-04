@@ -368,7 +368,225 @@ class ModelManager:
             torch.cuda.empty_cache()
         
         self.logger.info("资源清理完成")
-
+    
+    def initialize_model_with_strategy(self,
+                                       strategy: str,
+                                       local_rank: int,
+                                       world_size: int,
+                                       **strategy_config) -> tuple:
+        """根据并行策略初始化模型
+        
+        Args:
+            strategy: 并行策略名称
+            local_rank: 本地进程rank
+            world_size: 总进程数
+            **strategy_config: 策略配置参数
+            
+        Returns:
+            tuple: (model, tokenizer)
+        """
+        self.logger.info(f"使用策略 {strategy} 初始化模型 (rank {local_rank}/{world_size})")
+        
+        self.current_strategy = strategy
+        
+        # 设置设备
+        if torch.cuda.is_available():
+            torch.cuda.set_device(local_rank)
+            self.device = torch.device(f"cuda:{local_rank}")
+        else:
+            self.device = torch.device("cpu")
+        
+        # 加载基础模型和分词器
+        self.load_model(local_rank)
+        
+        # 根据策略设置并行
+        if strategy == 'pure_data_parallel':
+            self._setup_data_parallel(local_rank, world_size)
+            
+        elif strategy == 'tensor_data_hybrid':
+            self._setup_tensor_data_hybrid(local_rank, world_size, **strategy_config)
+            
+        elif strategy == 'pipeline_data_hybrid':
+            self._setup_pipeline_data_hybrid(local_rank, world_size, **strategy_config)
+            
+        elif strategy == 'full_model_parallel':
+            self._setup_full_model_parallel(local_rank, world_size, **strategy_config)
+            
+        else:
+            raise ValueError(f"未知的并行策略: {strategy}")
+        
+        self._print_model_info()
+        
+        return self.model, self.tokenizer
+    
+    def _setup_data_parallel(self, local_rank: int, world_size: int):
+        """设置纯数据并行"""
+        self.logger.info("设置数据并行策略")
+        
+        # 初始化分布式
+        if not dist.is_initialized():
+            dist.init_process_group(
+                backend='nccl' if torch.cuda.is_available() else 'gloo',
+                init_method='env://',
+                rank=local_rank,
+                world_size=world_size,
+                timeout=datetime.timedelta(seconds=300)
+            )
+        
+        # 将模型移动到GPU
+        self.model = self.model.to(self.device)
+        
+        # 包装为DDP
+        self.model = DDP(
+            self.model,
+            device_ids=[local_rank],
+            output_device=local_rank,
+            find_unused_parameters=False
+        )
+        
+        self.is_distributed = True
+    
+    def _setup_tensor_data_hybrid(self, local_rank: int, world_size: int, **config):
+        """设置张量并行+数据并行混合策略"""
+        self.logger.info("设置张量+数据并行混合策略")
+        
+        tp_size = config.get('tensor_parallel_size', 2)
+        dp_size = world_size // tp_size
+        
+        # 初始化分布式
+        if not dist.is_initialized():
+            dist.init_process_group(
+                backend='nccl' if torch.cuda.is_available() else 'gloo',
+                init_method='env://',
+                rank=local_rank,
+                world_size=world_size,
+                timeout=datetime.timedelta(seconds=300)
+            )
+        
+        # 创建并行组
+        self._create_parallel_groups(local_rank, world_size, tp_size, dp_size)
+        
+        # 将模型移动到GPU
+        self.model = self.model.to(self.device)
+        
+        # 简化的张量并行实现（实际应该使用FairScale或Megatron）
+        if tp_size > 1:
+            self.logger.warning("张量并行需要专门的库支持，当前使用简化实现")
+            # 这里应该集成FairScale或Megatron的张量并行
+        
+        # 数据并行包装
+        if dp_size > 1:
+            self.model = DDP(
+                self.model,
+                device_ids=[local_rank],
+                output_device=local_rank,
+                process_group=self.parallel_groups.get('data_parallel_group')
+            )
+        
+        self.is_distributed = True
+    
+    def _setup_pipeline_data_hybrid(self, local_rank: int, world_size: int, **config):
+        """设置流水线并行+数据并行混合策略"""
+        self.logger.info("设置流水线+数据并行混合策略")
+        
+        pp_size = config.get('pipeline_parallel_size', 2)
+        dp_size = world_size // pp_size
+        
+        # 初始化分布式
+        if not dist.is_initialized():
+            dist.init_process_group(
+                backend='nccl' if torch.cuda.is_available() else 'gloo',
+                init_method='env://',
+                rank=local_rank,
+                world_size=world_size,
+                timeout=datetime.timedelta(seconds=300)
+            )
+        
+        # 创建并行组
+        self._create_parallel_groups(local_rank, world_size, 1, dp_size, pp_size)
+        
+        # 将模型移动到GPU
+        self.model = self.model.to(self.device)
+        
+        # 简化的流水线并行实现
+        if pp_size > 1:
+            self.logger.warning("流水线并行需要专门的库支持，当前使用简化实现")
+            # 这里应该集成FairScale或GPipe的流水线并行
+        
+        # 数据并行包装
+        if dp_size > 1:
+            self.model = DDP(
+                self.model,
+                device_ids=[local_rank],
+                output_device=local_rank,
+                process_group=self.parallel_groups.get('data_parallel_group')
+            )
+        
+        self.is_distributed = True
+    
+    def _setup_full_model_parallel(self, local_rank: int, world_size: int, **config):
+        """设置全模型并行策略"""
+        self.logger.info("设置全模型并行策略")
+        
+        tp_size = config.get('tensor_parallel_size', 2)
+        pp_size = config.get('pipeline_parallel_size', 2)
+        
+        # 初始化分布式
+        if not dist.is_initialized():
+            dist.init_process_group(
+                backend='nccl' if torch.cuda.is_available() else 'gloo',
+                init_method='env://',
+                rank=local_rank,
+                world_size=world_size,
+                timeout=datetime.timedelta(seconds=300)
+            )
+        
+        # 创建并行组
+        self._create_parallel_groups(local_rank, world_size, tp_size, 1, pp_size)
+        
+        # 将模型移动到GPU
+        self.model = self.model.to(self.device)
+        
+        # 简化的全模型并行实现
+        self.logger.warning("全模型并行需要专门的库支持，当前使用简化实现")
+        
+        self.is_distributed = True
+    
+    def _create_parallel_groups(self, rank: int, world_size: int, 
+                               tp_size: int = 1, dp_size: int = 1, pp_size: int = 1):
+        """创建并行进程组"""
+        self.parallel_groups = {}
+        
+        # 数据并行组
+        if dp_size > 1:
+            for i in range(tp_size * pp_size):
+                dp_ranks = [i + j * tp_size * pp_size for j in range(dp_size)]
+                dp_group = dist.new_group(dp_ranks)
+                
+                if rank in dp_ranks:
+                    self.parallel_groups['data_parallel_group'] = dp_group
+        
+        # 张量并行组
+        if tp_size > 1:
+            for pp_rank in range(pp_size):
+                for dp_rank in range(dp_size):
+                    tp_ranks = [pp_rank * tp_size * dp_size + dp_rank * tp_size + tp_rank 
+                               for tp_rank in range(tp_size)]
+                    tp_group = dist.new_group(tp_ranks)
+                    
+                    if rank in tp_ranks:
+                        self.parallel_groups['tensor_parallel_group'] = tp_group
+        
+        # 流水线并行组
+        if pp_size > 1:
+            for tp_rank in range(tp_size):
+                for dp_rank in range(dp_size):
+                    pp_ranks = [pp_rank * tp_size * dp_size + dp_rank * tp_size + tp_rank 
+                               for pp_rank in range(pp_size)]
+                    pp_group = dist.new_group(pp_ranks)
+                    
+                    if rank in pp_ranks:
+                        self.parallel_groups['pipeline_parallel_group'] = pp_group
 
 class ModelParallelManager(ModelManager):
     """支持模型并行的模型管理器"""
