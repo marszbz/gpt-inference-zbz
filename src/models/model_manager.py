@@ -538,13 +538,21 @@ class ModelManager:
             )
         
         self.is_distributed = True
-    
-    def _setup_full_model_parallel(self, local_rank: int, world_size: int, **config):
+      def _setup_full_model_parallel(self, local_rank: int, world_size: int, **config):
         """设置全模型并行策略"""
         self.logger.info("设置全模型并行策略")
         
-        tp_size = config.get('tensor_parallel_size', 2)
-        pp_size = config.get('pipeline_parallel_size', 2)
+        # 根据world_size动态调整并行大小
+        tp_size = min(config.get('tensor_parallel_size', 2), world_size)
+        pp_size = min(config.get('pipeline_parallel_size', 1), world_size // tp_size)
+        
+        self.logger.info(f"全模型并行配置: tp_size={tp_size}, pp_size={pp_size}, world_size={world_size}")
+        
+        # 验证配置
+        if tp_size * pp_size > world_size:
+            self.logger.warning(f"并行配置超出world_size，调整为: tp_size={world_size}, pp_size=1")
+            tp_size = world_size
+            pp_size = 1
         
         # 初始化分布式
         if not dist.is_initialized():
@@ -566,20 +574,32 @@ class ModelManager:
         self.logger.warning("全模型并行需要专门的库支持，当前使用简化实现")
         
         self.is_distributed = True
-    
-    def _create_parallel_groups(self, rank: int, world_size: int, 
+      def _create_parallel_groups(self, rank: int, world_size: int, 
                                tp_size: int = 1, dp_size: int = 1, pp_size: int = 1):
         """创建并行进程组"""
         self.parallel_groups = {}
+        
+        self.logger.info(f"创建并行组: rank={rank}, world_size={world_size}, tp_size={tp_size}, dp_size={dp_size}, pp_size={pp_size}")
+        
+        # 验证配置
+        total_ranks_needed = tp_size * dp_size * pp_size
+        if total_ranks_needed > world_size:
+            self.logger.warning(f"所需ranks ({total_ranks_needed}) 超出world_size ({world_size})，使用简化配置")
+            # 简化为只使用张量并行
+            tp_size = min(tp_size, world_size)
+            dp_size = 1
+            pp_size = 1
         
         # 数据并行组
         if dp_size > 1:
             for i in range(tp_size * pp_size):
                 dp_ranks = [i + j * tp_size * pp_size for j in range(dp_size)]
-                dp_group = dist.new_group(dp_ranks)
-                
-                if rank in dp_ranks:
-                    self.parallel_groups['data_parallel_group'] = dp_group
+                # 确保所有ranks都在有效范围内
+                dp_ranks = [r for r in dp_ranks if r < world_size]
+                if len(dp_ranks) > 1:
+                    dp_group = dist.new_group(dp_ranks)
+                    if rank in dp_ranks:
+                        self.parallel_groups['data_parallel_group'] = dp_group
         
         # 张量并行组
         if tp_size > 1:
@@ -587,10 +607,12 @@ class ModelManager:
                 for dp_rank in range(dp_size):
                     tp_ranks = [pp_rank * tp_size * dp_size + dp_rank * tp_size + tp_rank 
                                for tp_rank in range(tp_size)]
-                    tp_group = dist.new_group(tp_ranks)
-                    
-                    if rank in tp_ranks:
-                        self.parallel_groups['tensor_parallel_group'] = tp_group
+                    # 确保所有ranks都在有效范围内
+                    tp_ranks = [r for r in tp_ranks if r < world_size]
+                    if len(tp_ranks) > 1:
+                        tp_group = dist.new_group(tp_ranks)
+                        if rank in tp_ranks:
+                            self.parallel_groups['tensor_parallel_group'] = tp_group
         
         # 流水线并行组
         if pp_size > 1:
@@ -598,10 +620,12 @@ class ModelManager:
                 for dp_rank in range(dp_size):
                     pp_ranks = [pp_rank * tp_size * dp_size + dp_rank * tp_size + tp_rank 
                                for pp_rank in range(pp_size)]
-                    pp_group = dist.new_group(pp_ranks)
-                    
-                    if rank in pp_ranks:
-                        self.parallel_groups['pipeline_parallel_group'] = pp_group
+                    # 确保所有ranks都在有效范围内
+                    pp_ranks = [r for r in pp_ranks if r < world_size]
+                    if len(pp_ranks) > 1:
+                        pp_group = dist.new_group(pp_ranks)
+                        if rank in pp_ranks:
+                            self.parallel_groups['pipeline_parallel_group'] = pp_group
 
 class ModelParallelManager(ModelManager):
     """支持模型并行的模型管理器"""
