@@ -67,15 +67,21 @@ class ModelManager:
         if not dist.is_initialized():
             dist.init_process_group(
                 backend=self.config['distributed']['backend'],
-                init_method=self.config['distributed'].get('init_method', 'env://'),
-                rank=rank,
+                init_method=self.config['distributed'].get('init_method', 'env://'),                rank=rank,
                 world_size=world_size,
                 timeout=datetime.timedelta(minutes=self.config['distributed'].get('timeout_minutes', 30))
             )
         
         self.is_distributed = True
-        self.device = torch.device(f"cuda:{rank}")
-        torch.cuda.set_device(self.device)
+        
+        # 在分布式设置中处理设备映射
+        if torch.cuda.is_available():
+            available_gpus = torch.cuda.device_count()
+            actual_device_id = rank % available_gpus
+            self.device = torch.device(f"cuda:{actual_device_id}")
+            torch.cuda.set_device(actual_device_id)
+        else:
+            self.device = torch.device("cpu")
         
         # 应用并行策略
         strategy_result, strategy_config = self.parallel_strategy_manager.apply_strategy(strategy_name, rank)
@@ -138,10 +144,15 @@ class ModelManager:
         
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
-        
-        # 确定设备
+          # 确定设备
         if local_rank is not None:
-            self.device = torch.device(f"cuda:{local_rank}")
+            # 在分布式设置中处理设备映射
+            if torch.cuda.is_available():
+                available_gpus = torch.cuda.device_count()
+                actual_device_id = local_rank % available_gpus
+                self.device = torch.device(f"cuda:{actual_device_id}")
+            else:
+                self.device = torch.device("cpu")
         elif self.device is None:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
@@ -388,11 +399,15 @@ class ModelManager:
         self.logger.info(f"使用策略 {strategy} 初始化模型 (rank {local_rank}/{world_size})")
         
         self.current_strategy = strategy
-        
-        # 设置设备
+          # 设置设备
         if torch.cuda.is_available():
-            torch.cuda.set_device(local_rank)
-            self.device = torch.device(f"cuda:{local_rank}")
+            # 在分布式设置中，CUDA_VISIBLE_DEVICES可能限制了可见GPU数量
+            # 因此需要映射local_rank到实际可用的GPU索引
+            available_gpus = torch.cuda.device_count()
+            actual_device_id = local_rank % available_gpus
+            torch.cuda.set_device(actual_device_id)
+            self.device = torch.device(f"cuda:{actual_device_id}")
+            self.logger.info(f"设置设备: {self.device}, 可用GPU数量: {available_gpus}, Local Rank: {local_rank}")
         else:
             self.device = torch.device("cpu")
         
@@ -435,12 +450,12 @@ class ModelManager:
         
         # 将模型移动到GPU
         self.model = self.model.to(self.device)
-        
-        # 包装为DDP
+          # 包装为DDP
+        actual_device_id = local_rank % torch.cuda.device_count() if torch.cuda.is_available() else 0
         self.model = DDP(
             self.model,
-            device_ids=[local_rank],
-            output_device=local_rank,
+            device_ids=[actual_device_id] if torch.cuda.is_available() else None,
+            output_device=actual_device_id if torch.cuda.is_available() else None,
             find_unused_parameters=False
         )
         
@@ -468,18 +483,18 @@ class ModelManager:
         
         # 将模型移动到GPU
         self.model = self.model.to(self.device)
-        
-        # 简化的张量并行实现（实际应该使用FairScale或Megatron）
+          # 简化的张量并行实现（实际应该使用FairScale或Megatron）
         if tp_size > 1:
             self.logger.warning("张量并行需要专门的库支持，当前使用简化实现")
             # 这里应该集成FairScale或Megatron的张量并行
         
         # 数据并行包装
         if dp_size > 1:
+            actual_device_id = local_rank % torch.cuda.device_count() if torch.cuda.is_available() else 0
             self.model = DDP(
                 self.model,
-                device_ids=[local_rank],
-                output_device=local_rank,
+                device_ids=[actual_device_id] if torch.cuda.is_available() else None,
+                output_device=actual_device_id if torch.cuda.is_available() else None,
                 process_group=self.parallel_groups.get('data_parallel_group')
             )
         
@@ -504,8 +519,7 @@ class ModelManager:
         
         # 创建并行组
         self._create_parallel_groups(local_rank, world_size, 1, dp_size, pp_size)
-        
-        # 将模型移动到GPU
+          # 将模型移动到GPU
         self.model = self.model.to(self.device)
         
         # 简化的流水线并行实现
@@ -515,10 +529,11 @@ class ModelManager:
         
         # 数据并行包装
         if dp_size > 1:
+            actual_device_id = local_rank % torch.cuda.device_count() if torch.cuda.is_available() else 0
             self.model = DDP(
                 self.model,
-                device_ids=[local_rank],
-                output_device=local_rank,
+                device_ids=[actual_device_id] if torch.cuda.is_available() else None,
+                output_device=actual_device_id if torch.cuda.is_available() else None,
                 process_group=self.parallel_groups.get('data_parallel_group')
             )
         

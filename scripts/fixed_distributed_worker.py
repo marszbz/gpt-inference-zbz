@@ -94,12 +94,15 @@ def run_distributed_inference_worker(args):
     world_size = int(os.environ.get('WORLD_SIZE', 1))
     
     logger.info(f"启动工作进程 - Local Rank: {local_rank}, World Rank: {world_rank}, World Size: {world_size}")
-    
-    # 设置CUDA设备
+      # 设置CUDA设备
     if not args.no_cuda and torch.cuda.is_available():
-        torch.cuda.set_device(local_rank)
-        device = f"cuda:{local_rank}"
-        logger.info(f"使用GPU设备: {device}")
+        # 在分布式设置中，CUDA_VISIBLE_DEVICES可能限制了可见GPU数量
+        # 因此需要映射local_rank到实际可用的GPU索引
+        available_gpus = torch.cuda.device_count()
+        actual_device_id = local_rank % available_gpus
+        torch.cuda.set_device(actual_device_id)
+        device = f"cuda:{actual_device_id}"
+        logger.info(f"使用GPU设备: {device}, 可用GPU数量: {available_gpus}, Local Rank: {local_rank}")
     else:
         device = "cpu"
         logger.info("使用CPU设备")
