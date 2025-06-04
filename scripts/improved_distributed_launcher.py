@@ -47,11 +47,9 @@ def run_single_gpu_worker(rank: int, args: argparse.Namespace):
         
         print(f"[Rank {rank}] 启动工作进程...")
         print(f"[Rank {rank}] 环境变量: {env_vars}")
-        
-        # 构建工作进程命令
+          # 构建工作进程命令
         python_exe = sys.executable
         worker_script = str(Path(__file__).parent / "fixed_distributed_worker.py")
-        
         cmd = [
             python_exe,
             worker_script,
@@ -59,7 +57,8 @@ def run_single_gpu_worker(rank: int, args: argparse.Namespace):
             "--model_config", args.model_config,
             "--batch_size", str(args.batch_size),
             "--data_path", args.data_path,
-            "--num_iterations", str(args.num_iterations)
+            "--num_iterations", str(args.num_iterations),
+            "--num_samples", str(args.num_samples)
         ]
         
         if args.no_cuda:
@@ -338,12 +337,15 @@ def main():
     parser.add_argument("--data_path", type=str,
                         default="data/test_prompts.jsonl",
                         help="测试数据路径")
-    parser.add_argument("--num_iterations", type=int, default=3,
-                        help="测试迭代次数")
+    parser.add_argument("--num_iterations", type=int, default=3,                        help="测试迭代次数")
     
     # 分布式参数
     parser.add_argument("--world_size", type=int, default=2,
                         help="进程数量 (GPU数量)")
+    parser.add_argument("--num_gpus", type=int, default=2,
+                        help="GPU数量 (与world_size相同)")
+    parser.add_argument("--num_samples", type=int, default=20,
+                        help="测试样本数量")
     
     # 其他参数
     parser.add_argument("--no_cuda", action="store_true",
@@ -352,6 +354,11 @@ def main():
                         help="随机种子")
     
     args = parser.parse_args()
+    
+    # 确保num_gpus与world_size一致
+    if args.num_gpus != args.world_size:
+        print(f"警告: num_gpus ({args.num_gpus}) 与 world_size ({args.world_size}) 不一致，使用 num_gpus")
+        args.world_size = args.num_gpus
     
     # 设置随机种子
     torch.manual_seed(args.seed)
