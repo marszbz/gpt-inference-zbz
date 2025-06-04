@@ -111,10 +111,9 @@ def run_distributed_inference_worker(args):
         # 初始化性能监控器
         monitor = PerformanceMonitor()
         monitor.start_monitoring()
-        
-        # 加载测试数据
+          # 加载测试数据
         logger.info(f"加载测试数据: {args.data_path}")
-        test_data = load_test_data(args.data_path)
+        test_data = load_test_data(args.data_path, getattr(args, 'num_samples', 100))
         
         # 为当前rank分配数据
         chunk_size = len(test_data) // world_size
@@ -350,8 +349,7 @@ def main():
                                'pipeline_data_hybrid', 'full_model_parallel'],
                         default='pure_data_parallel',
                         help="并行策略")
-    
-    # 推理参数
+      # 推理参数
     parser.add_argument("--batch_size", type=int, default=4,
                         help="批次大小")
     parser.add_argument("--data_path", type=str,
@@ -359,6 +357,8 @@ def main():
                         help="测试数据路径")
     parser.add_argument("--num_iterations", type=int, default=3,
                         help="测试迭代次数")
+    parser.add_argument("--num_samples", type=int, default=20,
+                        help="测试样本数量")
     
     # 其他参数
     parser.add_argument("--no_cuda", action="store_true",
