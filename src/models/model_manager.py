@@ -6,6 +6,7 @@
 import torch
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
+import datetime
 from transformers import (
     GPT2LMHeadModel, 
     GPT2Tokenizer, 
@@ -62,15 +63,14 @@ class ModelManager:
         os.environ['MASTER_PORT'] = self.config['distributed']['master_port']
         os.environ['WORLD_SIZE'] = str(world_size)
         os.environ['RANK'] = str(rank)
-        
-        # 初始化分布式进程组
+          # 初始化分布式进程组
         if not dist.is_initialized():
             dist.init_process_group(
                 backend=self.config['distributed']['backend'],
                 init_method=self.config['distributed'].get('init_method', 'env://'),
                 rank=rank,
                 world_size=world_size,
-                timeout=torch.distributed.timedelta(minutes=self.config['distributed'].get('timeout_minutes', 30))
+                timeout=datetime.timedelta(minutes=self.config['distributed'].get('timeout_minutes', 30))
             )
         
         self.is_distributed = True
